@@ -136,16 +136,21 @@ def decision_matrix_tool_func(input: DecisionMatrixInput = None, **kwargs) -> st
             weights=weights,
             scores=scores
         )
-        # Найти лучший вариант
         best_option = max(result, key=result.get)
-        # Формируем подробную таблицу
-        details = "\nDetailed scores (option: [score1, score2, ...], total):"
+        # Формируем подробную таблицу с заголовками
+        table = "| Option | " + " | ".join(criteria) + " | Total |\n"
+        table += "|" + "---|" * (len(criteria) + 2) + "\n"
         for i, option in enumerate(options):
             score_list = scores[i]
             total = result[option]
-            details += f"\n{option}: {score_list} (total: {total})"
-        # Формируем финальный вывод
-        return f"Best option: {best_option}\n{details}"
+            table += f"| {option} | " + " | ".join(str(s) for s in score_list) + f" | {total} |\n"
+        # Явная инструкция для LLM: не убирай таблицу!
+        return (
+            f"Best option: {best_option}\n"
+            f"Below is the full decision matrix with numbers for each option and criterion, and the total scores.\n"
+            f"{table}"
+            f"(Always show this table in the answer!)"
+        )
     except Exception as e:
         return f"Error: {str(e)}"
 
