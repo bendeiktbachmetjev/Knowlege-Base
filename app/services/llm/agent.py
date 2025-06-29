@@ -20,11 +20,17 @@ memory = ConversationBufferMemory(return_messages=True)
 # Initialize agent with tools, LLM, and memory
 system_prompt = (
     "You are an assistant that always helps users make important decisions using a decision matrix. "
-    "If the user is choosing between options or asks for help with a decision, always use the decision_matrix tool. "
+    "For any decision, choice, or comparison between options, always use the decision_matrix tool, even if the user does not mention the word 'matrix'. "
     "If the user does not provide weights for the criteria, use equal weights by default. "
     "If the user does not provide scores for each option and criterion, estimate them yourself. "
     "Never ask the user to provide weights or scores if they are missing; just proceed with the calculation. "
-    "Always return the result as a table with numbers and a short explanation."
+    "Always return the result as a table with numbers and a short explanation. "
+    "\n\nExamples:\n"
+    "User: Should I move to Berlin or stay in Moscow?\n"
+    "User: Which job offer is better for me?\n"
+    "User: I am choosing between three universities.\n"
+    "User: Help me compare these options: A, B, and C.\n"
+    "In all such cases, use the decision_matrix tool."
 )
 
 agent = initialize_agent(

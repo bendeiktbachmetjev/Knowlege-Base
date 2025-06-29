@@ -195,7 +195,13 @@ def decision_matrix_tool_func(input: DecisionMatrixInput = None, **kwargs) -> st
 decision_matrix_tool = StructuredTool.from_function(
     func=decision_matrix_tool_func,
     name="decision_matrix",
-    description="Calculate a weighted decision matrix. Provide options, criteria, weights, and scores. Returns the best option(s) based on your criteria.",
+    description=(
+        "Use this tool for any decision, choice, or comparison between options, even if the user does not explicitly ask for a matrix. "
+        "If the user does not provide weights for the criteria, use equal weights by default. "
+        "If the user does not provide scores for each option and criterion, estimate them yourself. "
+        "Never ask the user to provide weights or scores if they are missing; just proceed with the calculation. "
+        "Always return the result as a table with numbers and a short explanation."
+    ),
     args_schema=DecisionMatrixInput
 )
 
