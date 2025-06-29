@@ -35,9 +35,15 @@ class BMIInput(BaseModel):
     weight_kg: float = Field(..., description="Weight in kilograms.")
     height_cm: float = Field(..., description="Height in centimeters.")
 
-def bmi_tool_func(input: BMIInput) -> str:
+def bmi_tool_func(input: BMIInput = None, **kwargs) -> str:
     try:
-        bmi = calculate_bmi(input.weight_kg, input.height_cm)
+        if input is not None:
+            weight_kg = input.weight_kg
+            height_cm = input.height_cm
+        else:
+            weight_kg = kwargs.get("weight_kg")
+            height_cm = kwargs.get("height_cm")
+        bmi = calculate_bmi(weight_kg, height_cm)
         return f"BMI: {bmi}"
     except Exception as e:
         return f"Error: {str(e)}"
