@@ -149,13 +149,25 @@ def decision_matrix_tool_func(input: DecisionMatrixInput = None, **kwargs) -> st
             scores=scores
         )
         best_option = max(result, key=result.get)
-        # Build detailed table with headers
-        table = "| Option | " + " | ".join(criteria) + " | Total |\n"
-        table += "|" + "---|" * (len(criteria) + 2) + "\n"
+        # Build plain text table with alignment
+        col_widths = [max(len(str(x)) for x in ["Option"] + options)]
+        for j, crit in enumerate(criteria):
+            col_widths.append(max(len(str(crit)), max(len(str(scores[i][j])) for i in range(len(options)))))
+        col_widths.append(max(len("Total"), max(len(str(result[opt])) for opt in options)))
+        # Header
+        header = "Option".ljust(col_widths[0]) + "  "
+        for idx, crit in enumerate(criteria):
+            header += crit.ljust(col_widths[idx+1]) + "  "
+        header += "Total".ljust(col_widths[-1])
+        # Rows
+        rows = []
         for i, option in enumerate(options):
-            score_list = scores[i]
-            total = result[option]
-            table += f"| {option} | " + " | ".join(str(s) for s in score_list) + f" | {total} |\n"
+            row = option.ljust(col_widths[0]) + "  "
+            for j in range(len(criteria)):
+                row += str(scores[i][j]).ljust(col_widths[j+1]) + "  "
+            row += str(result[option]).ljust(col_widths[-1])
+            rows.append(row)
+        table = header + "\n" + "\n".join(rows)
         # Build explanations
         explanation_text = ""
         if explanations:
@@ -167,7 +179,7 @@ def decision_matrix_tool_func(input: DecisionMatrixInput = None, **kwargs) -> st
         return (
             f"Best option: {best_option}\n"
             f"Below is the full decision matrix with numbers for each option and criterion, and the total scores.\n"
-            f"{table}"
+            f"{table}\n"
             f"{explanation_text}"
             f"(Always show this table and explanations in the answer!)"
         )
