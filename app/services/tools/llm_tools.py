@@ -77,10 +77,11 @@ class DecisionMatrixInput(BaseModel):
     weights: list[float] = Field(..., description="List of weights for each criterion.")
     scores: list[list[float]] | None = Field(None, description="Matrix of scores: each row is an option, each column is a criterion. If not provided, the agent will estimate scores automatically.")
 
-def auto_score(options, criteria):
+def auto_score(options, criteria, with_explanations=False):
     """
     Use LLM to estimate scores for each option by each criterion (1-5 scale) for objective criteria.
     For subjective criteria, assign all options a score of 1.
+    If with_explanations=True, returns (scores, explanations)
     """
     typical_objective_criteria = {
         "salary", "income", "pay", "money", "earnings", "wage",
@@ -89,29 +90,37 @@ def auto_score(options, criteria):
         "difficulty", "training", "education", "competition"
     }
     scores = []
+    explanations = []
     for criterion in criteria:
-        # Определяем, объективный ли критерий
         if any(obj in criterion.lower() for obj in typical_objective_criteria):
-            # Objective: спросить LLM оценки для всех опций по этому критерию
             prompt = (
-                f"Оцени специальности по критерию '{criterion}' по шкале от 1 до 5. "
-                f"Варианты: {', '.join(options)}. "
-                "Верни только JSON: [score1, score2, ...] — по порядку опций."
+                f"Evaluate the options by the criterion '{criterion}' on a scale from 1 to 5. "
+                f"Options: {', '.join(options)}. "
+                "Return only JSON: {\"scores\": [score1, score2, ...], \"explanations\": [\"explanation1\", ...]}"
             )
             response = llm.invoke(prompt)
             import json
             try:
-                crit_scores = json.loads(response.content)
+                data = json.loads(response.content)
+                crit_scores = data.get("scores", [3 for _ in options])
+                crit_expls = data.get("explanations", ["No explanation" for _ in options])
                 if not isinstance(crit_scores, list) or len(crit_scores) != len(options):
                     crit_scores = [3 for _ in options]
+                if not isinstance(crit_expls, list) or len(crit_expls) != len(options):
+                    crit_expls = ["No explanation" for _ in options]
             except Exception:
                 crit_scores = [3 for _ in options]
+                crit_expls = ["No explanation" for _ in options]
         else:
-            # Subjective: всем по 1
             crit_scores = [1 for _ in options]
+            crit_expls = ["Subjective criterion, all options are equally important" for _ in options]
         scores.append(crit_scores)
-    # scores: [criterion][option] -> нужно транспонировать в [option][criterion]
+        explanations.append(crit_expls)
+    # scores: [criterion][option] -> [option][criterion]
     scores_t = [[scores[j][i] for j in range(len(criteria))] for i in range(len(options))]
+    explanations_t = [[explanations[j][i] for j in range(len(criteria))] for i in range(len(options))]
+    if with_explanations:
+        return scores_t, explanations_t
     return scores_t
 
 def decision_matrix_tool_func(input: DecisionMatrixInput = None, **kwargs) -> str:
@@ -126,10 +135,13 @@ def decision_matrix_tool_func(input: DecisionMatrixInput = None, **kwargs) -> st
             criteria = kwargs.get("criteria")
             weights = kwargs.get("weights")
             scores = kwargs.get("scores")
+        # If user did not specify weights, assign equal weights
         if weights is None or len(weights) != len(criteria):
             weights = [10 for _ in criteria]
+        # If user did not specify scores, let GPT generate them
+        explanations = None
         if scores is None:
-            scores = auto_score(options, criteria)
+            scores, explanations = auto_score(options, criteria, with_explanations=True)
         result = calculate_decision_matrix(
             options=options,
             criteria=criteria,
@@ -137,19 +149,27 @@ def decision_matrix_tool_func(input: DecisionMatrixInput = None, **kwargs) -> st
             scores=scores
         )
         best_option = max(result, key=result.get)
-        # Формируем подробную таблицу с заголовками
+        # Build detailed table with headers
         table = "| Option | " + " | ".join(criteria) + " | Total |\n"
         table += "|" + "---|" * (len(criteria) + 2) + "\n"
         for i, option in enumerate(options):
             score_list = scores[i]
             total = result[option]
             table += f"| {option} | " + " | ".join(str(s) for s in score_list) + f" | {total} |\n"
-        # Явная инструкция для LLM: не убирай таблицу!
+        # Build explanations
+        explanation_text = ""
+        if explanations:
+            explanation_text = "\nExplanations for each score by criterion and option:\n"
+            for j, crit in enumerate(criteria):
+                explanation_text += f"- {crit}:\n"
+                for i, option in enumerate(options):
+                    explanation_text += f"    {option}: {explanations[i][j]}\n"
         return (
             f"Best option: {best_option}\n"
             f"Below is the full decision matrix with numbers for each option and criterion, and the total scores.\n"
             f"{table}"
-            f"(Always show this table in the answer!)"
+            f"{explanation_text}"
+            f"(Always show this table and explanations in the answer!)"
         )
     except Exception as e:
         return f"Error: {str(e)}"
